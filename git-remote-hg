@@ -709,7 +709,11 @@ def do_list(parser):
 
     for branch, heads in orig.branchmap().iteritems():
         # only open heads
-        heads = [h for h in heads if 'close' not in repo.changelog.read(h)[5]]
+        try:
+            heads = [h for h in heads if 'close' not in repo.changelog.read(h)[5]]
+        except Exception as e:
+            warn("%s repo.changelog.read error '%s'", branch, e)
+            heads = []
         if heads:
             branches[branch] = heads
 
