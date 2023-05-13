@@ -11,15 +11,18 @@ test_description='Test remote-hg'
 test -n "$TEST_DIRECTORY" || TEST_DIRECTORY=$(dirname $0)/
 . "$TEST_DIRECTORY"/test-lib.sh
 
-if ! test_have_prereq PYTHON
+if test "$CAPABILITY_PUSH" = "t"
 then
-	skip_all='skipping remote-hg tests; python not available'
-	test_done
+	git config --global remote-hg.capability-push true
+	git config --global remote-hg.push-updates-notes true
+	git config --global remote-hg.fast-export-options '-C -C -M'
+else
+	git config --global remote-hg.capability-push false
 fi
 
-if ! python -c 'import mercurial' > /dev/null 2>&1
+if ! test_have_prereq PYTHON
 then
-	skip_all='skipping remote-hg tests; mercurial not available'
+	skip_all='skipping remote-hg tests; python with mercurial not available'
 	test_done
 fi
 
@@ -80,9 +83,6 @@ check_push () {
 			;;
 		'non-fast-forward')
 			grep "^ ! \[rejected\] *${branch} -> ${branch} (non-fast-forward)$" error || ref_ret=1
-			;;
-		'fetch-first')
-			grep "^ ! \[rejected\] *${branch} -> ${branch} (fetch first)$" error || ref_ret=1
 			;;
 		'forced-update')
 			grep "^ + [a-f0-9]*\.\.\.[a-f0-9]* *${branch} -> ${branch} (forced update)$" error || ref_ret=1
@@ -176,7 +176,7 @@ test_expect_success 'update bookmark' '
 	git checkout --quiet devel &&
 	echo devel > content &&
 	git commit -a -m devel &&
-	git push --quiet
+	git push --quiet origin devel
 	) &&
 
 	check_bookmark hgrepo devel devel
@@ -442,7 +442,7 @@ test_expect_success 'remote update bookmark diverge' '
 	echo diverge > content &&
 	git commit -a -m diverge &&
 	check_push 1 <<-\EOF
-	diverge:fetch-first
+	diverge:non-fast-forward
 	EOF
 	) &&
 
@@ -466,6 +466,52 @@ test_expect_success 'remote new bookmark multiple branch head' '
 
 # cleanup previous stuff
 rm -rf hgrepo
+
+testcopyrenamedesc='push commits with copy and rename'
+testcopyrename='
+	test_when_finished "rm -rf gitrepo hgrepo" &&
+
+	(
+	hg init hgrepo &&
+	cd hgrepo &&
+	echo zero > content &&
+	hg add content &&
+	hg commit -m zero
+	) &&
+
+	git clone "hg::hgrepo" gitrepo &&
+
+	(
+	cd gitrepo &&
+	cp content content-copy &&
+	# recent git-fast-export is (too) picky in recognizing copies
+	# although git-log is not as picky;
+	# since https://github.com/git/git/commit/8096e1d385660c159d9d47e69b2be63cf22e4f31
+	# a copy is only marked if source filed not modified as well
+	# (though destination file can be modified)
+	echo one >> content-copy &&
+	git add content content-copy &&
+	git commit -m copy &&
+	git mv content-copy content-moved
+	git commit -m moved &&
+	git push origin master
+	) &&
+
+	(
+	hg -R hgrepo update &&
+	test_cmp gitrepo/content hgrepo/content
+	test_cmp gitrepo/content-moved hgrepo/content-moved
+	cd hgrepo &&
+	test `hg log -f content-moved | grep -c changeset` -eq 3
+	)
+'
+
+if test "$CAPABILITY_PUSH" = "t"
+then
+test_expect_success "$testcopyrenamedesc" "$testcopyrename"
+else
+test_expect_failure "$testcopyrenamedesc" "$testcopyrename"
+fi
 
 test_expect_success 'fetch special filenames' '
 	test_when_finished "rm -rf hgrepo gitrepo && LC_ALL=C" &&
@@ -618,47 +664,102 @@ test_expect_success 'remote big push' '
 	EOF
 	) &&
 
-	check_branch hgrepo default one &&
-	check_branch hgrepo good_branch "good branch" &&
-	check_branch hgrepo bad_branch "bad branch" &&
-	check_branch hgrepo new_branch &&
-	check_bookmark hgrepo good_bmark one &&
-	check_bookmark hgrepo bad_bmark1 one &&
-	check_bookmark hgrepo bad_bmark2 one &&
-	check_bookmark hgrepo new_bmark
+	if test "$CAPABILITY_PUSH" = "t"
+	then
+		# cap push handles refs one by one
+		# so it will push all requested it can
+		check_branch hgrepo default six &&
+		check_branch hgrepo good_branch eight &&
+		check_branch hgrepo bad_branch "bad branch" &&
+		check_branch hgrepo new_branch ten &&
+		check_bookmark hgrepo good_bmark three &&
+		check_bookmark hgrepo bad_bmark1 one &&
+		check_bookmark hgrepo bad_bmark2 one &&
+		check_bookmark hgrepo new_bmark six
+	else
+		check_branch hgrepo default one &&
+		check_branch hgrepo good_branch "good branch" &&
+		check_branch hgrepo bad_branch "bad branch" &&
+		check_branch hgrepo new_branch &&
+		check_bookmark hgrepo good_bmark one &&
+		check_bookmark hgrepo bad_bmark1 one &&
+		check_bookmark hgrepo bad_bmark2 one &&
+		check_bookmark hgrepo new_bmark
+	fi
 '
 
-test_expect_success 'remote big push fetch first' '
+test_expect_success 'remote big push non fast forward' '
 	test_when_finished "rm -rf hgrepo gitrepo*" &&
 
-	setup_big_push
+	(
+	hg init hgrepo &&
+	cd hgrepo &&
+	echo zero > content &&
+	hg add content &&
+	hg commit -m zero &&
+	hg bookmark bad_bmark &&
+	hg bookmark good_bmark &&
+	hg bookmark -i good_bmark &&
+	hg -q branch good_branch &&
+	echo "good branch" > content &&
+	hg commit -m "good branch" &&
+	hg -q branch bad_branch &&
+	echo "bad branch" > content &&
+	hg commit -m "bad branch"
+	) &&
+
+	git clone "hg::hgrepo" gitrepo &&
 
 	(
 	cd hgrepo &&
-	hg checkout bad_branch &&
-	hg bookmark -f bad_bmark1 &&
+	hg bookmark -f bad_bmark &&
 	echo update_bmark > content &&
 	hg commit -m "update bmark"
 	) &&
 
 	(
 	cd gitrepo &&
+	echo two > content &&
+	git commit -q -a -m two &&
+
+	git checkout -q good_bmark &&
+	echo three > content &&
+	git commit -q -a -m three &&
+
+	git checkout -q bad_bmark &&
+	echo four > content &&
+	git commit -q -a -m four &&
+
+	git checkout -q branches/bad_branch &&
+	echo five > content &&
+	git commit -q -a -m five &&
 
 	check_push 1 --all <<-\EOF &&
 	master
 	good_bmark
-	bad_bmark1:fetch-first
-	branches/bad_branch:fetch-first
+	bad_bmark:non-fast-forward
+	branches/bad_branch:non-fast-forward
 	EOF
 
 	git fetch &&
 
-	check_push 1 --all <<-\EOF
-	master
-	good_bmark
-	bad_bmark1:non-fast-forward
-	branches/bad_branch:non-fast-forward
-	EOF
+        if test "$CAPABILITY_PUSH" = "t"
+        then
+                # cap push handles refs one by one
+		# so it will already have pushed some above previously
+		# (and master is a fake one that jumps around a bit)
+		check_push 1 --all <<-\EOF
+		bad_bmark:non-fast-forward
+		branches/bad_branch:non-fast-forward
+		EOF
+	else
+		check_push 1 --all <<-\EOF
+		master
+		good_bmark
+		bad_bmark:non-fast-forward
+		branches/bad_branch:non-fast-forward
+		EOF
+	fi
 	)
 '
 
@@ -670,19 +771,32 @@ test_expect_success 'remote big push force' '
 	(
 	cd gitrepo &&
 
-	check_push 0 --force --all <<-\EOF
-	master
-	good_bmark
-	branches/good_branch
-	new_bmark:new
-	branches/new_branch:new
-	bad_bmark1:forced-update
-	bad_bmark2:forced-update
-	branches/bad_branch:forced-update
-	EOF
+	if test "$CAPABILITY_PUSH" = "t"
+	then
+		check_push 0 --force --all <<-\EOF
+		master:forced-update
+		good_bmark:forced-update
+		branches/good_branch:forced-update
+		new_bmark:new
+		branches/new_branch:new
+		bad_bmark1:forced-update
+		bad_bmark2:forced-update
+		branches/bad_branch:forced-update
+		EOF
+	else
+		check_push 0 --force --all <<-\EOF
+		master
+		good_bmark
+		branches/good_branch
+		new_bmark:new
+		branches/new_branch:new
+		bad_bmark1:forced-update
+		bad_bmark2:forced-update
+		branches/bad_branch:forced-update
+		EOF
+	fi
 	) &&
 
-	check_branch hgrepo default four &&
 	check_branch hgrepo good_branch eight &&
 	check_branch hgrepo bad_branch nine &&
 	check_branch hgrepo new_branch ten &&
@@ -738,16 +852,30 @@ test_expect_success 'remote big push force dry-run' '
 	(
 	cd gitrepo &&
 
-	check_push 0 --force --dry-run --all <<-\EOF
-	master
-	good_bmark
-	branches/good_branch
-	new_bmark:new
-	branches/new_branch:new
-	bad_bmark1:forced-update
-	bad_bmark2:forced-update
-	branches/bad_branch:forced-update
-	EOF
+	if test "$CAPABILITY_PUSH" = "t"
+	then
+		check_push 0 --force --dry-run --all <<-\EOF
+		master:forced-update
+		good_bmark:forced-update
+		branches/good_branch:forced-update
+		new_bmark:new
+		branches/new_branch:new
+		bad_bmark1:forced-update
+		bad_bmark2:forced-update
+		branches/bad_branch:forced-update
+		EOF
+	else
+		check_push 0 --force --dry-run --all <<-\EOF
+		master
+		good_bmark
+		branches/good_branch
+		new_bmark:new
+		branches/new_branch:new
+		bad_bmark1:forced-update
+		bad_bmark2:forced-update
+		branches/bad_branch:forced-update
+		EOF
+	fi
 	) &&
 
 	check_branch hgrepo default one &&
@@ -782,6 +910,78 @@ test_expect_success 'remote double failed push' '
 	test_expect_code 1 git push &&
 	test_expect_code 1 git push
 	)
+'
+test_expect_success 'fetch prune' '
+	test_when_finished "rm -rf gitrepo hgrepo" &&
+
+	(
+	hg init hgrepo &&
+	cd hgrepo &&
+	echo zero > content &&
+	hg add content &&
+	hg commit -m zero &&
+	echo feature-a > content &&
+	hg commit -m feature-a
+	hg bookmark feature-a
+	) &&
+
+	git clone "hg::hgrepo" gitrepo &&
+	check gitrepo origin/feature-a feature-a &&
+
+	(
+	cd hgrepo &&
+	hg bookmark -d feature-a
+	) &&
+
+	(
+	cd gitrepo &&
+	git fetch --prune origin
+	git branch -a > out &&
+	! grep feature-a out
+	)
+'
+
+test_expect_success 'fetch multiple independent histories' '
+	test_when_finished "rm -rf gitrepo hgrepo" &&
+
+	(
+	hg init hgrepo &&
+	cd hgrepo &&
+	echo zero > content &&
+	hg add content &&
+	hg commit -m zero &&
+	hg up -r null &&
+	echo another > ocontent &&
+	hg add ocontent &&
+	hg commit -m one
+	) &&
+
+	# -r 1 acts as master
+	(
+	git init --bare gitrepo && cd gitrepo &&
+	git remote add origin hg::../hgrepo &&
+	git fetch origin refs/heads/*:refs/heads/*
+	) &&
+
+	(
+	cd hgrepo &&
+	hg up 0 &&
+	echo two > content &&
+	hg commit -m two
+	) &&
+
+	# now master already exists
+	# -r 2 becomes master head which has rev 0 as ancestor
+	# so when importing (parentless) rev 0, a reset is needed
+	# (to ensure rev 0 is not given a parent commit)
+	(
+	cd gitrepo &&
+	git fetch origin &&
+	git log --format="%s" origin/master > ../actual
+	) &&
+
+	hg -R hgrepo log -r . -f --template "{desc}\n" > expected &&
+	test_cmp actual expected
 '
 
 test_expect_success 'clone remote with null bookmark, then push' '
@@ -828,7 +1028,8 @@ test_expect_success 'notes' '
 	test_cmp expected actual
 '
 
-test_expect_failure 'push updates notes' '
+testpushupdatesnotesdesc='push updates notes'
+testpushupdatesnotes='
 	test_when_finished "rm -rf hgrepo gitrepo" &&
 
 	(
@@ -852,6 +1053,13 @@ test_expect_failure 'push updates notes' '
 	git --git-dir=gitrepo/.git log --pretty="tformat:%N" --notes=hg > actual &&
 	test_cmp expected actual
 '
+
+if test "$CAPABILITY_PUSH" = "t"
+then
+test_expect_success "$testpushupdatesnotesdesc" "$testpushupdatesnotes"
+else
+test_expect_failure "$testpushupdatesnotesdesc" "$testpushupdatesnotes"
+fi
 
 test_expect_success 'push bookmark without changesets' '
 	test_when_finished "rm -rf hgrepo gitrepo" &&
@@ -878,7 +1086,7 @@ test_expect_success 'push bookmark without changesets' '
 	check_bookmark hgrepo feature-a two
 '
 
-test_expect_unstable 'pull tags' '
+test_expect_success 'pull tags' '
 	test_when_finished "rm -rf hgrepo gitrepo" &&
 
 	(
@@ -1049,6 +1257,28 @@ test_expect_success 'clone replace directory with a file' '
 	check_files gitrepo "dir_or_file"
 '
 
+test_expect_success 'clone can ignore invalid refnames' '
+	test_when_finished "rm -rf hgrepo gitrepo" &&
+
+	(
+	hg init hgrepo &&
+	cd hgrepo &&
+
+	touch test.txt &&
+	hg add test.txt &&
+	hg commit -m master &&
+	hg branch parent &&
+	echo test >test.txt &&
+	hg commit -m test &&
+	hg branch parent/child &&
+	echo test1 >test.txt &&
+	hg commit -m test1
+	) &&
+
+	git clone -c remote-hg.ignore-name=child "hg::hgrepo" gitrepo &&
+	check_files gitrepo "test.txt"
+'
+
 test_expect_success 'push annotated tag' '
 	test_when_finished "rm -rf hgrepo gitrepo" &&
 
@@ -1098,4 +1328,7 @@ test_expect_success 'timezone issues with negative offsets' '
 	test_cmp expected actual
 '
 
+if test "$CAPABILITY_PUSH" != "t"
+then
 test_done
+fi

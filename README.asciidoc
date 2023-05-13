@@ -1,4 +1,4 @@
-`git-remote-hg` is the semi-official Mercurial bridge from the Git project, once
+'git-remote-hg' is the semi-official Mercurial bridge from Git project, once
 installed, it allows you to clone, fetch and push to and from Mercurial
 repositories as if they were Git ones:
 
@@ -6,16 +6,40 @@ repositories as if they were Git ones:
 git clone "hg::http://selenic.com/repo/hello"
 --------------------------------------
 
-To enable this, simply add the `git-remote-hg` script anywhere in your `$PATH`:
+To enable this, simply add the 'git-remote-hg' script anywhere in your `$PATH`:
 
 --------------------------------------
-curl https://raw.githubusercontent.com/felipec/git-remote-hg/master/git-remote-hg -o ~/bin/git-remote-hg
+wget https://raw.github.com/mnauw/git-remote-hg/master/git-remote-hg -O ~/bin/git-remote-hg
 chmod +x ~/bin/git-remote-hg
+--------------------------------------
+
+In Windows, you also need to put and an NTFS symbolic link named `python2.exe` somewhere
+on your `$PATH` pointing to your Python 2 executable:
+
+--------------------------------------
+mklink <path to link> <path to python.exe>
 --------------------------------------
 
 That's it :)
 
 Obviously you will need Mercurial installed.
+
+****
+At present, this "working copy"/fork <<add-features, adds the following features>>
+(and I would prefer it is indeed rather a "working copy"
+to be appropriately merged upstream):
+
+* eliminates a number of <<limitations, limitations>> as mentioned below
+* properly annotates copy/rename when pushing new commits to Mercurial
+* adds a 'git-hg-helper' script than can aid in the git-hg interaction workflow
+* provides enhanced bidirectional git-hg safety
+* avoids clutter of `refs/hg/...` by keeping these implementation details really private
+* more robust and efficient fetching, especially so when fetching or cloning from multiple
+  Mercurial clones which will only process changesets not yet fetched from elsewhere
+  (as opposed to processing everything all over again)
+
+See sections below or sidemarked notes for more details.
+****
 
 == Configuration ==
 
@@ -25,8 +49,7 @@ If you want to see Mercurial revisions as Git commit notes:
 % git config core.notesRef refs/notes/hg
 --------------------------------------
 
-If you are not interested in Mercurial permanent and global branches (aka.
-commit labels):
+If you are not interested in Mercurial permanent and global branches (aka. commit labels):
 
 --------------------------------------
 % git config --global remote-hg.track-branches false
@@ -34,14 +57,13 @@ commit labels):
 
 With this configuration, the 'branches/foo' refs won't appear.
 
-If you want the equivalent of `hg clone --insecure`:
+If you want the equivalent of 'hg clone --insecure':
 
 --------------------------------------
 % git config --global remote-hg.insecure true
 --------------------------------------
 
-If you want `git-remote-hg` to be compatible with `hg-git`, and generate exactly
-the same commits:
+If you want 'git-remote-hg' to be compatible with 'hg-git', and generate exactly the same commits:
 
 --------------------------------------
 % git config --global remote-hg.hg-git-compat true
@@ -49,14 +71,15 @@ the same commits:
 
 == Notes ==
 
-Remember to run `git gc --aggressive` after cloning a repository, especially if
+Remember to run `git gc --aggressive` after cloning a repository, specially if
 it's a big one. Otherwise lots of space will be wasted.
 
-The newest supported version of Mercurial is 6.2, the oldest one is 2.4.
+The oldest version of mercurial supported is 1.9. For the most part 1.8 works,
+but you might experience some issues.
 
 === Pushing branches ===
 
-To push a branch, you need to use the 'branches/' prefix:
+To push a branch, you need to use the "branches/" prefix:
 
 --------------------------------------
 % git checkout branches/next
@@ -66,7 +89,7 @@ To push a branch, you need to use the 'branches/' prefix:
 
 All the pushed commits will receive the "next" Mercurial named branch.
 
-*Note*: Make sure you don't have `remote-hg.track-branches` disabled.
+*Note*: Make sure you don't have +remote-hg.track-branches+ disabled.
 
 === Cloning HTTPS ===
 
@@ -76,7 +99,7 @@ The simplest way is to specify the user and password in the URL:
 git clone hg::https://user:password@bitbucket.org/user/repo
 --------------------------------------
 
-You can also use the https://mercurial-scm.org/wiki/SchemesExtension[schemes extension]:
+You can also use the http://mercurial.selenic.com/wiki/SchemesExtension[schemes extension]:
 
 --------------------------------------
 [auth]
@@ -86,7 +109,28 @@ bb.password = password
 --------------------------------------
 
 Finally, you can also use the
-https://pypi.org/project/mercurial_keyring[keyring extension].
+https://pypi.python.org/pypi/mercurial_keyring[keyring extension].
+
+However, some of these features require very new versions of 'git-remote-hg',
+so you might have better luck simply specifying the username and password in
+the URL.
+
+=== Submodules ===
+
+Hg repositories can be used as git submodule, but this requires to allow the hg procotol to be used by git submodule commands:
+
+--------------------------------------
+git config protocol.hg.allow always
+--------------------------------------
+
+Or adding manually the following to your git configuration file:
+
+--------------------------------------
+[protocol "hg"]
+        allow = always
+--------------------------------------
+
+This can be done per-repository, every time after a clone, or globally in the global .gitconfig (using the --global command-line option).
 
 === Caveats ===
 
@@ -97,33 +141,279 @@ Mercurial branches and bookmarks have some limitations of Git branches: you
 can't have both 'dev/feature' and 'dev' (as Git uses files and directories to
 store them).
 
-Multiple anonymous heads (which are useless anyway) are not supported: you
+Multiple anonymous heads (which are useless anyway) are not supported; you
 would only see the latest head.
 
-Closed branches are not supported: they are not shown and you can't close or
+Closed branches are not supported; they are not shown and you can't close or
 reopen. Additionally in certain rare situations a synchronization issue can
 occur (https://github.com/felipec/git/issues/65[Bug #65]).
 
-Limitations of Git's https://git-scm.com/docs/gitremote-helpers[remote-helpers]
-framework apply.
+[[limitations]]
+Limitations of the remote-helpers' framework apply. In particular, these
+commands don't work:
+
+* `git push origin :branch-to-delete`
+
+****
+Another limitation is that if `git log` reports a rename, this will not survive
+the push and Mercurial will not be aware of a rename (and similarly so for copy).
+Though Mercurial would know about it if you *manually* ran `git-format-patch`
+followed by a `hg apply -s`, which is not the nice way to go obviously.
+
+Actually, scratch the limitations above ascribed to the remote-helpers framework.
+They are not limitations of the framework, but are due to how the original
+implementation of 'git-remote-hg' interacts with it.
+Using the remote-helpers framework in only a slightly different way has none
+of the above limitations.  See the <<no-limitations, relevant section>>
+below for more details.
+****
 
 == Other projects ==
 
-There are other `git-remote-hg` projects out there, but this is the original,
-which was distributed officially in the Git project.
+There are other 'git-remote-hg' projects out there, do not confuse this one,
+this is the one distributed officially by the Git project
+(_though actually no longer so nowadays_):
 
-Over the years many similar tools have died out, the only actively maintained
-alternative is mnauw's fork of this project:
-https://github.com/mnauw/git-remote-hg[mnauw/git-remote-hg]. I've merged some of
-his patches, and he has merged some of my patches, so the projects are mostly in
-sync, but not quite. In particular Nauwelaerts' fork has many administrative
-extensions, which although useful to some people, I don't believe they belong
-in the core.
+* https://github.com/msysgit/msysgit/wiki/Guide-to-git-remote-hg[msysgit's git-remote-hg]
+* https://github.com/rfk/git-remote-hg[rfk's git-remote-hg]
 
 For a comparison between these and other projects go
 https://github.com/felipec/git/wiki/Comparison-of-git-remote-hg-alternatives[here].
 
+[[no-limitations]]
+== Limitations (or not) ==
+
+If interested in some of technical details behind this explanation, then also
+see the relevant section in 'git-remote-hg' manpage.  Otherwise, the general
+idea is presented here.
+
+More precisely and simply, the <<limitations, mentioned limitations>> are indeed
+limitations of the `export` capability of
+https://www.kernel.org/pub/software/scm/git/docs/gitremote-helpers.html[gitremote-helpers(1)]
+framework.  However, the framework also supports a `push` capability and when this
+is used appropriately in the remote helper the aforementioned limitations do not apply.
+In the case of `export` capability, git-core will internally invoke `git-fast-export`
+and the helper will process this data and hand over generated changesets to Mercurial.
+In the case of `push` capability, git informs the helper what (refs) should go where,
+and the helper is free to ponder about this and take the required action, such as
+to invoke `git-fast-export` itself (with suitable options) and process its output
+the same way as before (and over to Mercurial).
+
+And so;
+
+* `git push origin :branch-to-delete` will delete the bookmark `branch-to-delete` on remote
+* `git push --dry-run origin branch` will not touch the remote
+(or any local state, except for local helper proxy repo)
+* `git push origin old:new` will push `old` onto `new` in the remote
+* `git push origin <history-with-copy/rename>` will push copy/rename aware Mercurial revisions
+
+To tweak how 'git-remote-hg' decides on a copy/rename, use e.g:
+--------------------------------------
+% git config --global remote-hg.fast-export-options '-M -C -C'
+--------------------------------------
+
+[[add-features]]
+== Additional Features ==
+
+=== Miscellaneous Tweaks ===
+Other than <<no-limitations, removing the limitations>> as mentioned above,
+a number of issues (either so reported in
+https://github.com/felipec/git-remote-hg/issues[issue tracking] or not) have been
+addressed here, e.g. notes handling, `fetch --prune` support, correctly fetching
+after a `strip` on remote repo, tracking remote changes to import (if any) in a
+safe, robust and efficient way, etc.  Some of these have been highlighted above.
+
+For example, the `refs/hg/...` refs are really an implementation detail
+that need not clutter up the (visible) ref space.  So, in as much as they
+are still relevant, these are now kept elsewhere out of sight.
+If somehow your workflow relies on having these in the old place:
+--------------------------------------
+% git config --global remote-hg.show-private-refs true
+--------------------------------------
+
+More importantly, a significantly more efficient workflow is achieved using
+one set of shared marks files for all remotes (which also forces a local repo
+to use an internal proxy clone).
+The practical consequence is that fetching from a newly added remote hg repo
+does not require another (lengthy) complete import
+(as the original clone) but will only fetch additional changesets (if any).
+The same goes for subsequent fetching from any hg remote; what was fetched
+and imported from some remote need not be imported again from another.
+Operating in this shared mode also has the added advantage
+of correctly pushing after a `strip` on a remote.
+This shared-marks-files behaviour is the default on a fresh repo clone.  It can
+also be enabled on an existing one by the following setting.
+--------------------------------------
+% git config --global remote-hg.shared-marks true
+--------------------------------------
+Note, however, that one should then perform a fetch from each relevant remote
+to fully complete the conversion (prior to subsequent pushing).
+
+Some Mercurial names (of branches, bookmarks, tags) may not be a valid git
+refname. See e.g. `man git-check-ref-format` for a rather involved set of rules.
+Moreover, while a slash `/` is allowed, it is not supported to have both a `parent`
+and `parent/child` branch (though only the latter is allowed). Even though
+it is not quite (bidirectionally) safe, a (percentage) URL encoding
+(with some additional twist) is performed to obtain sane git refnames, at least
+so for most cases.  If some nasty cases still slip through, then likely only
+a few instances (out of a whole Mercurial repo) are
+problematic.  This could be handled by a single-branch clone and/or configuring
+a suitable refspec.  However, it might be more convenient to simply filter out a
+few unimportant pesky cases, which can be done by configuring a regural
+expression in following setting:
+--------------------------------------
+% git config remote-hg.ignore-name nasty/nested/name
+--------------------------------------
+Recall also that a config setting can be provided at clone time
+(command line using `--config` option).
+
+--------------------------------------
+% git config --global remote-hg.remove-username-quotes false
+--------------------------------------
+
+By default, for backwards compatibility with earlier versions,
+git-remote-hg removes quotation marks from git usernames
+(e.g. 'Raffaello "Raphael" Sanzio da Urbino <raphael@example.com>'
+would become 'Raffaello Raphael Sanzio da Urbino
+<raphael@example.com>').  This breaks round-trip compatibility; a git
+commit by an author with quotes would become an hg commit without,
+and if re-imported into git, would get a different SHA1.
+
+To restore round-trip compatibility (at the cost of backwards
+compatibility with commits converted by older versions of
+git-remote-hg), turn 'remote-hg.remove-username-quotes' off.
+
+=== Helper Commands ===
+
+Beyond that, a 'git-hg-helper' script has been added that can aid in the git-hg
+interaction workflow with a number of subcommands that are not in the purview of
+a remote helper.  This is similar to e.g. 'git-svn' being a separate program
+altogether.  These subcommands
+
+* provide conversion from a hg changeset id to a git commit hash, or vice versa
+* provide consistency and cleanup maintenance on internal `git-remote-hg` metadata marks
+* provide optimization of git marks of a fetch-only remote
+
+See the helper script commands' help description for further details.
+It should simply be installed (`$PATH` accessible) next to 'git-remote-hg'.
+Following git alias is probably also convenient as it allows invoking the helper
+as `git hg`:
+--------------------------------------
+% git config --global alias.hg '!git-hg-helper'
+--------------------------------------
+
+With that in place, running `git hg gc <remote>` after initial fetch from (large)
+<remote> will save quite some space in the git marks file.  Not to mention some time
+each time it is loaded and saved again (upon fetch).  If the remote is ever pushed
+to, the marks file will similarly be squashed, but for a fetch-only <remote>
+the aforementioned command will do.  It may also be needed to run aforementioned
+command after a `git gc` has been performed.  You will notice the need
+when `git-fast-import` or `git-fast-export` complain about not finding objects ;-)
+
+In addition, the helper also provides support routines for `git-remote-hg` that
+provide for increased (or at least safer) git-hg bidirectionality.
+
+Before explaining how it helps, let's first elaborate on what is really
+meant by the above _bidirectionality_ since it can be regarded in 2 directions.
+From the git repo point of view, one can push to a hg repo and then fetch (or
+clone) back to git. Or one could have fetched a changeset from some hg repo and
+then push this back to (another) hg clone.  So what happens in either case? In the
+former case, from git to hg and then back, things work out ok whether or not in
+hg-git compatibility mode.  In the latter case, it is very likely (but
+ultimately not guaranteed) that it works out in hg-git compatibility mode, and far
+less likely otherwise.
+
+Most approaches on bidirectionality try to go for the "mapping" way.
+That is, find a way to map all Mercurial (meta)data somewhere into git;
+in the commit message, or in non-standard ways in extra headers in commit objects
+(e.g. the latest hg-git approach).  The upside of this is that such a git repo can be
+cloned to another git repo, and then one can push back into hg which will/should
+turn out ok.  The downside is setting up such a mapping in the first place,
+avoiding the slightest error in translating authors, timestamps etc,
+and maintaining all that whenever there is some Mercurial API/ABI breakage.
+
+The approach here is to consider a typical git-hg interaction workflow and to
+ensure simple/safe bidirectionality in such a setting.  That is, you are (obviously)
+in a situation having to deal with some Mercurial repo and quite probably
+with various clones as well. The objective is to fetch from these repos/clones,
+work in git and then push back.  And in the latter case, one needs to make sure
+that hg changesets from one hg clone end up *exactly* that way in another hg
+clone (or the git-hg bridge usage might not be so appreciated).  Such pushes are
+probably not recommended workflow practice, but no accidents or issues should
+arise from any push in these circumstances. There is less interest in this setting,
+however, for (git-wise) cloning around the derived git repo.
+
+Now, depending on your workflow and to ensure the above behaves well,
+following setting can be enabled as preferred:
+
+--------------------------------------
+% git config --global remote-hg.check-hg-commits fail
+% git config --global remote-hg.check-hg-commits push
+--------------------------------------
+
+If not set, the behaviour is as before; pushing a commit based on hg changeset
+will again transform the latter into a new hg changeset which may or may not
+match the original (as described above).
+If set to `fail`, it will reject and abort the push.
+If set to `push`, it will re-use the original changeset in a Mercurial native
+way (rather than creating a new one).  The latter guarantees the changeset ends
+up elsewhere as expected (regardless of conversion mapping or ABI).
+
+Note that identifying and re-using the hg changeset relies on metadata
+(`refs/notes/hg` and marks files) that is not managed or maintained by any
+git-to-git fetch (or clone).
+As such (and as said), this approach aims for plain-and-simple safety, but only
+within a local scope (git repo).
+
+=== Mercurial Subrepository Support ===
+
+Both Git and Mercurial support a submodule/subrepo system.
+In case of Git, URLs are managed in `.gitmodules`, submodule state is tracked
+in tree objects and only Git submodules are supported.
+Mercurial manages URLs in `.hgsub`, records subrepo state in `.hgsubstate` and
+supports Git, Mercurial and Subversion subrepos (at time of writing).
+Merely the latter diversity in subrepo types shows that somehow mapping Mercurial
+"natively" to git submodules is not quite evident.  Moreover, while one might
+conceivably devise such a mapping restricted to git and hg subrepos, any such would
+seem error-prone and fraught with all sorts of tricky cases and inconvenient
+workflow handling (innovative robust suggestions are welcome though ...)
+
+So, rather than overtaking the plumbing and ending up with stuffed drain further on,
+the approach here is (again) to keep it plain-and-simple.  That is, provide some
+git-ish look-and-feel helper script commands for setting up and manipulating
+subrepos.  And so (if the alias mentioned above has been defined), `git hg sub`
+provides commands similar to `git submodule` that accomplish what is otherwise
+taken care of by the Mercurial subrepo support.
+The latter is obviously extended to be git-aware in that e.g. a Mercurial subrepo
+is cloned as a git-hg subrepo and translation back-and-forth between hg changeset id
+and git commit hash is also performed where needed.  There is no support though
+for Subversion subrepos.
+
+As with the other commands, see the help description for the proper details,
+but the following example session may clarify the principle:
+
+--------------------------------------
+% git clone hg::hgparentrepo
+# bring in subrepos in proper location:
+% git hg sub update
+# do some work
+% git pull --rebase origin
+# update subrepo state:
+% git hg sub update
+# do work in subrepo and push
+% ( cd subrepo && git push origin HEAD:master )
+# fetch to update refs/notes/hg (or enable remote-hg.push-updates-notes)
+% ( cd subrepo && git fetch origin )
+# update .hgsubstate to subrepo HEAD:
+% git hg sub upstate
+% git add .hgsubstate
+# add more, commit and push as intended
+--------------------------------------
+
+Note that the refspec `HEAD:master` is needed if working with detached `HEAD`
+in subrepo, and that pushing such refspec is actually supported now in a git-hg subrepo
+as explained <<no-limitations, earlier>>.
+
 == Contributing ==
 
-Send your patches to the mailing list git-fc@googlegroups.com (no need to
-subscribe).
+Please file an issue with some patches or a pull-request.

@@ -1,6 +1,6 @@
 RM ?= rm -f
 
-T = main.t bidi.t
+T = main.t main-push.t bidi.t helper.t
 TEST_DIRECTORY := $(CURDIR)
 
 export TEST_DIRECTORY
