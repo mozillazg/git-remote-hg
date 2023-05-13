@@ -26,8 +26,25 @@ hg:4.3 hggit:0.8.10 dulwich:0.18.0 # 2017_11
 hg:4.4 hggit:0.8.10 dulwich:0.18.0 # 2017_11
 
 hg:4.5 hggit:0.8.11 dulwich:0.18.0 # 2018_02
-hg:4.6 hggit:0.8.12 dulwich:0.19.7 # 2018_10
-hg:4.7 hggit:0.8.12 dulwich:0.19.7 # 2018_10
-hg:4.8 hggit:@ dulwich:0.19.11
-hg:4.9 hggit:@ dulwich:0.19.11
-hg:5.0 hggit:@ dulwich:0.19.11
+hg:4.6 hggit:0.8.13 dulwich:0.19.7 # 2018_10
+hg:4.7 hggit:0.8.13 dulwich:0.19.7 # 2018_10
+hg:4.8 hggit:0.8.13 dulwich:0.19.7 # 2018_10
+hg:4.9 hggit:0.8.13 dulwich:0.19.7 # 2019_01
+hg:5.0 hggit:0.8.13 dulwich:0.19.7 # 2019_04
+hg:5.1 hggit:0.8.13 dulwich:0.19.7 # 2019_07
+hg:5.2 hggit:0.8.13 dulwich:0.19.7 # 2019_11
+
+hg:5.3 hggit:0.9.0 dulwich:0.19.15 # 2020_01
+hg:5.4 hggit:0.9.0 dulwich:0.19.15 # 2020_04
+hg:5.5 hggit:0.9.0 dulwich:0.19.15 # 2020_08
+hg:5.6 hggit:0.9.0 dulwich:0.19.15 # 2020_10
+
+hg:5.7 hggit:0.10.0 dulwich:0.19.16 # 2021_01
+
+hg:5.8 hggit:0.10.2 dulwich:0.20.0 # 2021_05 # python3
+hg:5.9 hggit:0.10.2 dulwich:0.20.0 # 2021_08
+hg:6.0 hggit:0.10.2 dulwich:0.20.0 # 2021_11
+hg:6.1 hggit:0.10.2 dulwich:0.20.0 # 2022_02
+hg:6.2 hggit:0.10.2 dulwich:0.20.0 # 2022_07
+
+hg:6.2 hggit:1.0.0 dulwich:0.20.45 # latest

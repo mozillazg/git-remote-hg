@@ -1,0 +1,25 @@
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        hg: [ '5.5', '5.6', '5.7', '5.8', '5.9', '6.0', '6.1', '6.2' ]
+    env:
+      HG_VERSION: ${{ matrix.hg }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+          check-latest: true
+      - name: Cache check-versions script
+        id: cache-check-versions
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/git-remote-hg
+          key: check-versions
+      - run: ./tools/check-versions hg:$HG_VERSION

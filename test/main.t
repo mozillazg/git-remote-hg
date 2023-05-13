@@ -17,7 +17,7 @@ then
 	test_done
 fi
 
-if ! python2 -c 'import mercurial' > /dev/null 2>&1
+if ! python -c 'import mercurial' > /dev/null 2>&1
 then
 	skip_all='skipping remote-hg tests; mercurial not available'
 	test_done
@@ -682,7 +682,7 @@ test_expect_success 'remote big push force' '
 	EOF
 	) &&
 
-	check_branch hgrepo default six &&
+	check_branch hgrepo default four &&
 	check_branch hgrepo good_branch eight &&
 	check_branch hgrepo bad_branch nine &&
 	check_branch hgrepo new_branch ten &&
