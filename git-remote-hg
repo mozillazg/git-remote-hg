@@ -197,6 +197,9 @@ class Marks:
                 'last-note': self.last_note }
 
     def store(self):
+        dirname = os.path.dirname(self.path)
+        ret = subprocess.call(['mkdir', '-p', dirname])
+        warn('ensure dir: %s, ret: %d, path: %s', dirname, ret, self.path)
         json.dump(self.dict(), open(self.path, 'w'))
 
     def __str__(self):
