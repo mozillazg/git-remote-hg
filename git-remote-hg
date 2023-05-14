@@ -580,7 +580,11 @@ def export_bookmark(repo, bmark):
 
 def export_branch(repo, branch):
     tip = get_branch_tip(repo, branch)
-    head = repo[tip]
+    try:
+        head = repo[tip]
+    except Exception as e:
+        sys.stderr.write(b'branch: {}, tip: {}, error: {}\n'.format(branch, tip, e))
+        return
     export_ref(repo, branch, 'branches', head)
 
 def export_head(repo):
