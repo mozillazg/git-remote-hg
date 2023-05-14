@@ -23,7 +23,7 @@ def get_remote_branches():
     for branch in filter(None, branches):
         if not branch.startswith(b'origin/'):
             continue
-        yield branch
+        yield str(branch)
 
 
 def add_local_branch(remote_branches, replace=re.compile('^origin/')):
