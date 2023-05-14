@@ -620,7 +620,8 @@ def get_branch_tip(repo, branch):
     # verify there's only one head
     if (len(heads) > 1):
         warn("Branch '%s' has more than one head, consider merging" % branch)
-        return branch_tip(hgref(branch))
+        return heads[0]
+        # return branch_tip(hgref(branch))
 
     return heads[0]
 
