@@ -8,7 +8,7 @@ import subprocess
 
 
 def run_cmd(cmd):
-    print('cmd: {}'.format(cmd))
+    # print('cmd: {}'.format(cmd))
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, shell=True)
     result = namedtuple('Result', ['stdout', 'stderr'])
@@ -26,11 +26,14 @@ def get_remote_branches():
     for branch in filter(None, branches):
         if not branch.startswith(b'origin/'):
             continue
-        yield str(branch)
+        yield branch.decode('utf-8')
 
 
-def add_local_branch(remote_branches, replace=re.compile('^origin/')):
-    remote_branches = filter(replace.match, remote_branches)
+def add_local_branch(remote_branches, replace=re.compile(r'^origin/')):
+    remote_branches = list(remote_branches)
+    # print('before: {}'.format(remote_branches))
+    remote_branches = list(filter(replace.match, remote_branches))
+    # print('after: {}'.format(remote_branches))
     local_branches = map(lambda x: replace.sub('', x), remote_branches)
     cmd = 'git branch --track {local} {remote}'
     for remote, local in zip(remote_branches, local_branches):
@@ -40,7 +43,7 @@ def add_local_branch(remote_branches, replace=re.compile('^origin/')):
 
 def main():
     remote_branches = get_remote_branches()
-    add_local_branch(remote_branches, re.compile('^origin/branches/'))
+    add_local_branch(remote_branches, re.compile(r'^origin/(branches/)?'))
 
 
 if __name__ == '__main__':
