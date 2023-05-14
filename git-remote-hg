@@ -583,7 +583,7 @@ def export_branch(repo, branch):
     try:
         head = repo[tip]
     except Exception as e:
-        sys.stderr.write(b'branch: {}, tip: {}, error: {}\n'.format(branch, tip, e))
+        sys.stderr.write('branch: {}, tip: {}, error: {}\n'.format(branch, tip, e))
         return
     export_ref(repo, branch, 'branches', head)
 
