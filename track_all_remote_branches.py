@@ -21,7 +21,7 @@ def get_remote_branches():
         raise OSError(result.stderr)
     branches = map(lambda x: x.strip(), result.stdout.split())
     for branch in filter(None, branches):
-        if not branch.startswith('origin/'):
+        if not branch.startswith(b'origin/'):
             continue
         yield branch
 
@@ -38,6 +38,7 @@ def add_local_branch(remote_branches, replace=re.compile('^origin/')):
 def main():
     remote_branches = get_remote_branches()
     add_local_branch(remote_branches, re.compile('^origin/branches/'))
+
 
 if __name__ == '__main__':
     main()
