@@ -8,10 +8,13 @@ import subprocess
 
 
 def run_cmd(cmd):
+    print('cmd: {}'.format(cmd))
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, shell=True)
     result = namedtuple('Result', ['stdout', 'stderr'])
-    return result(*process.communicate())
+    ret = result(*process.communicate())
+    print('cmd: {}, ret: {}'.format(cmd, ret))
+    return ret
 
 
 def get_remote_branches():
